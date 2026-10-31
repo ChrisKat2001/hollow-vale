@@ -8,7 +8,13 @@
 </div>
 <script>
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Offline mode unavailable", e)));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").then((reg) => reg.update()).catch((e) => console.warn("Offline mode unavailable", e)));
+  // When a new version takes over, reload once so players see it straight away.
+  let hadController = !!navigator.serviceWorker.controller, reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController && !reloaded) { reloaded = true; location.reload(); }
+    hadController = true;
+  });
 }
 (function () {
   const btn = document.getElementById("installBtn"), help = document.getElementById("installHelp"), steps = document.getElementById("installSteps");

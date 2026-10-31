@@ -622,13 +622,14 @@ function render() {
   renderSheet(); renderSpells(); renderDiceLog();
   $("rollResult").textContent = "Roll 10 or more for the next hint. Chance: 11 in 20, or 55%.";
   renderModes();
-  if (S.view === "prologue" || !S.name || !S.cls) return renderPrologue();
   if (S.view === "stories") return renderStories();
   if (S.view === "editor") {
     if (!ED) { try { const d = JSON.parse(localStorage.getItem(KEY + "-draft") || "null"); if (d) { ED = d.ED; edId = d.id; } } catch (e) {} }
     if (ED) return renderEditor();
     S.view = "stories"; return renderStories();
   }
+  if (S.view === "session" && sessionOf(S.current)?.story) { /* stories can be played before a hero exists */ }
+  else if (S.view === "prologue" || !S.name || !S.cls) return renderPrologue();
   if (S.view === "map" || !S.current || !sessionOf(S.current)) return renderMap();
   const sess = sessionOf(S.current);
   const prog = P(sess.id);
@@ -646,8 +647,7 @@ function renderTrack(sess, prog) {
 
 function renderModes() {
   const nav = $("modes"); if (!nav) return;
-  const hasHero = S.name && S.cls && S.view !== "prologue";
-  nav.hidden = !hasHero;
+  nav.hidden = false;
   const inStory = S.view === "stories" || S.view === "editor" || (S.view === "session" && sessionOf(S.current)?.story);
   nav.querySelectorAll("[data-mode]").forEach((b) => { const on = (b.dataset.mode === "stories") === !!inStory; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
 }
@@ -1392,7 +1392,7 @@ load();
     try { const st = await decodeStory(q); const id = await addStory(st); S.view = "stories"; save(); history.replaceState(null, "", location.pathname); } catch (e) { console.warn(e); }
   } else if (q) { try { const st = await decodeStory(q); await addStory(st); history.replaceState(null, "", location.pathname); } catch (e) {} }
   document.querySelectorAll("#modes [data-mode]").forEach((b) => b.addEventListener("click", () => {
-    if (b.dataset.mode === "stories") { S.view = "stories"; } else { S.view = "map"; }
+    if (b.dataset.mode === "stories") { S.view = "stories"; } else { S.view = S.name && S.cls ? "map" : "prologue"; }
     save(); render(); window.scrollTo({ top: 0 });
   }));
   render();
