@@ -214,3 +214,7 @@ pre.out.err { text-shadow: 0 0 6px rgba(255,107,94,.4); }
 .vtable th.rn { z-index: 1; }
 .vtable tbody tr:hover td { background: rgba(217,164,65,.18); }
 .vnote { font-size: 14px; color: var(--muted); }
+/* ---------- Install button (app build only) ---------- */
+.installbtn { position: fixed; right: 16px; bottom: 16px; z-index: 15; font-family: var(--display); font-size: 18px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--gold); background: #17131a; color: var(--gold); box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+.installbtn:hover { background: var(--gold); color: var(--bg); }
+.installbtn[hidden] { display: none; }

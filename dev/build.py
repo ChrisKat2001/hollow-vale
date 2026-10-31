@@ -14,12 +14,7 @@ APP_HEAD = """
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hollow Vale">""" if APP_MODE else ""
-APP_TAIL = """
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Offline mode unavailable", e)));
-}
-</script>""" if APP_MODE else ""
+APP_TAIL = open("src/app_tail.html").read() if APP_MODE else ""
 html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>

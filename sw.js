@@ -1,5 +1,5 @@
 /* The Hollow Vale: offline support. Bump VERSION whenever any file changes. */
-const VERSION = "hollow-vale-v2";
+const VERSION = "hollow-vale-v3";
 const PRECACHE = [
   "./",
   "icons/apple-touch-icon.png",

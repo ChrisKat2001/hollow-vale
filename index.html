@@ -437,6 +437,10 @@ pre.out.err { text-shadow: 0 0 6px rgba(255,107,94,.4); }
 .vtable th.rn { z-index: 1; }
 .vtable tbody tr:hover td { background: rgba(217,164,65,.18); }
 .vnote { font-size: 14px; color: var(--muted); }
+/* ---------- Install button (app build only) ---------- */
+.installbtn { position: fixed; right: 16px; bottom: 16px; z-index: 15; font-family: var(--display); font-size: 18px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--gold); background: #17131a; color: var(--gold); box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+.installbtn:hover { background: var(--gold); color: var(--bg); }
+.installbtn[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -3119,10 +3123,47 @@ boot();
 
 $("spellSearch").addEventListener("input", (e) => { spellQuery = e.target.value; renderSpells(); });
 </script>
+<button class="installbtn" id="installBtn" hidden>📲 Install app</button>
+<div class="viewer" id="installHelp" role="dialog" aria-modal="true" aria-label="How to install">
+  <div class="vpanel" style="max-width:460px">
+    <div class="vhead"><div class="dm-label">INSTALL THE HOLLOW VALE</div><button class="vclose" id="installClose" aria-label="Close">×</button></div>
+    <div id="installSteps" class="narration"></div>
+  </div>
+</div>
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Offline mode unavailable", e)));
 }
+(function () {
+  const btn = document.getElementById("installBtn"), help = document.getElementById("installHelp"), steps = document.getElementById("installSteps");
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  if (standalone) return;
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const safari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|Edg\//.test(ua);
+  const mac = /Macintosh/.test(ua) && !ios;
+  let deferred = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e; btn.hidden = false; });
+  window.addEventListener("appinstalled", () => { btn.hidden = true; help.classList.remove("open"); });
+  function guide() {
+    let html;
+    if (ios && safari) html = "<p>1. Tap the <b>Share</b> button: the square with an arrow pointing up, at the top right on iPad or at the bottom on iPhone.</p><p>2. Scroll down and tap <b>Add to Home Screen</b>.</p><p>3. Tap <b>Add</b>. The Hollow Vale now sits on your home screen like any app.</p>";
+    else if (ios) html = "<p>On iPhone and iPad, apps like this install from <b>Safari</b>.</p><p>1. Copy this address: <code>" + location.href.split("#")[0] + "</code></p><p>2. Open it in Safari.</p><p>3. Tap <b>Share</b>, then <b>Add to Home Screen</b>, then <b>Add</b>.</p>";
+    else if (mac && safari) html = "<p>In the menu bar at the top of the screen, choose <b>File → Add to Dock</b>. Then click <b>Add</b>.</p>";
+    else html = "<p>Look for the <b>install icon</b> at the right end of the address bar. Or open the browser menu (⋮) and choose <b>Install app</b> or <b>Add to Home screen</b>.</p>";
+    steps.innerHTML = html + '<p style="color:var(--muted);font-size:15px">Let it load once until it says <i>R is ready</i>. After that it also works offline.</p>';
+    help.classList.add("open");
+  }
+  if (ios || (mac && safari)) btn.hidden = false;
+  btn.addEventListener("click", async () => {
+    if (deferred) { deferred.prompt(); const r = await deferred.userChoice; if (r.outcome === "accepted") btn.hidden = true; deferred = null; return; }
+    guide();
+  });
+  document.getElementById("installClose").addEventListener("click", () => help.classList.remove("open"));
+  help.addEventListener("click", (e) => { if (e.target === help) help.classList.remove("open"); });
+  setTimeout(() => { if (btn.hidden) btn.hidden = false; }, 4000);
+})();
 </script>
+
 </body>
 </html>
