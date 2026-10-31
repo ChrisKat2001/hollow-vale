@@ -564,7 +564,9 @@ const P = (sid) => {
   p.fails = p.fails || {}; p.tier = p.tier || {}; p.revealed = p.revealed || {}; p.interp = p.interp || {};
   return p;
 };
-const sessionOf = (sid) => SESSIONS.find((x) => x.id === sid);
+const sessionOf = (sid) => SESSIONS.find((x) => x.id === sid) || (S.stories?.[sid] ? storyToSession(sid, S.stories[sid]) : null);
+const helpFor = (sess, st) => HELP[sess.id]?.[st.id] || (sess.story ? storyHelp(sess.id, st.id) : null);
+const interpFor = (sess, st) => INTERPRET[sess.id]?.[st.id] || (sess.story ? storyInterp(sess.id, st.id) : null);
 const REQUIRES = { s2: "s1", s3: "s2", s6: "s3", s4: "s6", s5: "s4" };
 function sessionState(i) {
   const sess = SESSIONS[i];
@@ -619,8 +621,15 @@ function renderDiceLog() {
 function render() {
   renderSheet(); renderSpells(); renderDiceLog();
   $("rollResult").textContent = "Roll 10 or more for the next hint. Chance: 11 in 20, or 55%.";
+  renderModes();
   if (S.view === "prologue" || !S.name || !S.cls) return renderPrologue();
-  if (S.view === "map" || !S.current) return renderMap();
+  if (S.view === "stories") return renderStories();
+  if (S.view === "editor") {
+    if (!ED) { try { const d = JSON.parse(localStorage.getItem(KEY + "-draft") || "null"); if (d) { ED = d.ED; edId = d.id; } } catch (e) {} }
+    if (ED) return renderEditor();
+    S.view = "stories"; return renderStories();
+  }
+  if (S.view === "map" || !S.current || !sessionOf(S.current)) return renderMap();
   const sess = sessionOf(S.current);
   const prog = P(sess.id);
   renderTrack(sess, prog);
@@ -631,11 +640,24 @@ function render() {
 function renderTrack(sess, prog) {
   const items = sess.chapters.map((c) => `<span class="${c.id < prog.step ? "done" : c.id === prog.step ? "now" : ""}">${c.short}</span>`);
   items.push(`<span class="${prog.step > sess.chapters.length ? "now" : ""}">Epilogue</span>`);
-  $("track").innerHTML = `<button class="backlink" id="toMap">← Map</button>` + items.join("");
+  $("track").innerHTML = `<button class="backlink" id="toMap">${sess.story ? (prog.testFrom ? "← Back to editor" : "← Story Mode") : "← Map"}</button>` + items.join("");
   $("toMap").addEventListener("click", goMap);
 }
 
-function goMap() { S.view = "map"; save(); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+function renderModes() {
+  const nav = $("modes"); if (!nav) return;
+  const hasHero = S.name && S.cls && S.view !== "prologue";
+  nav.hidden = !hasHero;
+  const inStory = S.view === "stories" || S.view === "editor" || (S.view === "session" && sessionOf(S.current)?.story);
+  nav.querySelectorAll("[data-mode]").forEach((b) => { const on = (b.dataset.mode === "stories") === !!inStory; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+}
+function goMap() {
+  const sess = sessionOf(S.current);
+  if (sess && sess.story) {
+    const prog = P(sess.id);
+    if (prog.testFrom) { delete S.stories.st_test; delete S.progress.st_test; S.current = null; S.view = "editor"; save(); render(); return; }
+    S.view = "stories"; save(); render(); window.scrollTo({ top: 0, behavior: "smooth" }); return;
+  } S.view = "map"; save(); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 
 function mapSVG() {
   // Positions of quest sites on the 1000 x 640 parchment.
@@ -758,7 +780,7 @@ function renderChapter(sess, prog) {
   const st = sess.chapters[prog.step - 1];
   const solved = prog.solved[st.id];
   const guess = prog.guesses[st.id];
-  const iq = INTERPRET[sess.id]?.[st.id];
+  const iq = interpFor(sess, st);
   const interpDone = !iq || prog.interp[st.id]?.done;
   const enemyHP = st.enemy ? (solved ? (interpDone ? 0 : Math.ceil(st.enemy.hp / 2)) : st.enemy.hp) : 0;
   const needsGuess = st.predict && !guess;
@@ -767,7 +789,7 @@ function renderChapter(sess, prog) {
     <div class="card">
       <div class="chead">
         <canvas class="portrait" id="npcArt" width="64" height="64" aria-hidden="true"></canvas>
-        <div><div class="dm-label">THE DUNGEON MASTER SPEAKS · SESSION ${sess.num}</div>
+        <div><div class="dm-label">THE DUNGEON MASTER SPEAKS · ${sess.story ? "STORY MODE" : `SESSION ${sess.num}`}</div>
         <h2 class="chapter">${st.title}</h2>
         <div class="npcname">With ${esc(NPC_NAMES[st.npc || sess.npc] || "")}</div></div>
       </div>
@@ -833,7 +855,7 @@ function renderChapter(sess, prog) {
 }
 
 function hintsHTML(sess, prog, st) {
-  const h = HELP[sess.id]?.[st.id]; if (!h) return "";
+  const h = helpFor(sess, st); if (!h) return "";
   const tier = prog.tier[st.id] || 0, fails = prog.fails[st.id] || 0;
   const solved = !!prog.solved[st.id], revealed = !!prog.revealed[st.id];
   const baseXP = sess.xp || 100, revealXP = Math.round(baseXP * REVEAL_XP / 100);
@@ -846,7 +868,7 @@ function hintsHTML(sess, prog, st) {
   }
   const row = [];
   if (!solved && tier < 2) row.push(`<button class="btn ghost small" id="hintRoll">🎲 Roll for a ${tier ? "clue" : "nudge"}</button>`);
-  if (!solved && !revealed && fails >= 2) row.push(`<button class="btn ghost small warn" id="revealBtn">Reveal the answer · only ${revealXP} XP</button>`);
+  if (!solved && !revealed && fails >= 2 && h.answer) row.push(`<button class="btn ghost small warn" id="revealBtn">Reveal the answer · only ${revealXP} XP</button>`);
   if (row.length) html += `<div class="hint-actions">${row.join("")}</div>`;
   html += `<div class="hint-note" id="hintNote">${solved ? "" : fails >= 2 || revealed ? "" : `The answer can be revealed after 2 failed casts. Failed casts so far: ${fails}.`}</div>`;
   return html;
@@ -858,7 +880,7 @@ function bindHints(sess, prog, st) {
     prog.revealed[st.id] = true; save(); refreshHints(sess, prog, st);
   });
   if ($("useAnswer")) $("useAnswer").addEventListener("click", () => {
-    const ta = $("code"); ta.value = HELP[sess.id][st.id].answer; prog.code[st.id] = ta.value; save(); syncHL();
+    const ta = $("code"); ta.value = helpFor(sess, st).answer; prog.code[st.id] = ta.value; save(); syncHL();
     ta.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
@@ -1021,19 +1043,19 @@ function renderEpilogue(sess, prog) {
     <div class="card">
       <div class="chead">
         <canvas class="portrait" id="npcArt" width="64" height="64" aria-hidden="true"></canvas>
-        <div><div class="dm-label">THE DUNGEON MASTER SPEAKS · SESSION ${sess.num}</div>
+        <div><div class="dm-label">THE DUNGEON MASTER SPEAKS · ${sess.story ? "STORY MODE" : `SESSION ${sess.num}`}</div>
         <h2 class="chapter">Epilogue · ${esc(sess.title)}</h2></div>
       </div>
       <div class="narration">${sess.epilogue(S, prog)}</div>
-      <div class="task"><b>Session ${sess.num} complete.</b> ${sess.summary} ${esc(S.name)} is level ${S.level} with ${S.xp} XP.</div>
+      <div class="task"><b>${sess.story ? "Story complete." : `Session ${sess.num} complete.`}</b> ${sess.summary} ${esc(S.name)} is level ${S.level} with ${S.xp} XP.</div>
       <div class="actions" style="padding:14px 0 0;border:0">
-        <button class="btn red" id="mapBtn">Back to the map →</button>
-        <span style="align-self:center;color:var(--muted);font-size:16px">${sess.optional ? "Next on the map: Millbrook." : SESSIONS[nextIdx] ? `New on the map: ${esc(next.place)}.` : "You have completed the whole campaign."}</span>
+        <button class="btn red" id="mapBtn">${sess.story ? (prog.testFrom ? "Back to the editor →" : "Back to Story Mode →") : "Back to the map →"}</button>
+        <span style="align-self:center;color:var(--muted);font-size:16px">${sess.story ? "" : sess.optional ? "Next on the map: Millbrook." : SESSIONS[nextIdx] ? `New on the map: ${esc(next.place)}.` : "You have completed the whole campaign."}</span>
       </div>
       <p style="margin-top:14px"><button class="reset" id="restart">Start over with a new character</button></p>
     </div>
-    ${feedbackHTML(sess)}`;
-  bindFeedback(sess, prog);
+    ${sess.story ? "" : feedbackHTML(sess)}`;
+  if (!sess.story) bindFeedback(sess, prog);
   drawSprite($("npcArt"), sess.npc);
   $("mapBtn").addEventListener("click", goMap);
   $("restart").addEventListener("click", () => { S = JSON.parse(JSON.stringify(DEFAULT)); save(); render(); });
@@ -1156,7 +1178,14 @@ async function rRun(src) {
   } finally { shelter.purge(); }
 }
 async function rCheck(sid, step, nimg) {
-  const raw = await webR.evalRString(`.check("${sid}", ${step}, ${nimg})`);
+  let raw;
+  const sess = sessionOf(sid);
+  if (sess && sess.story) {
+    const ch = sess.chapters[step - 1];
+    await webR.objs.globalEnv.bind(".ck", ch.check || "");
+    await webR.objs.globalEnv.bind(".cfail", ch.fail || "");
+    raw = await webR.evalRString(`.check_story(.ck, .cfail, ${nimg})`);
+  } else raw = await webR.evalRString(`.check("${sid}", ${step}, ${nimg})`);
   const i = raw.indexOf("\x01");
   return [raw.slice(0, i) === "1", raw.slice(i + 1)];
 }
@@ -1261,7 +1290,7 @@ function rollForHint() {
   const prog = sess ? P(sess.id) : null;
   const st = sess && prog.step <= sess.chapters.length ? sess.chapters[prog.step - 1] : null;
   const say = (t) => { $("rollResult").textContent = t; const n = $("hintNote"); if (n) n.textContent = t; };
-  if (!st || !HELP[sess.id]?.[st.id]) { say("No quest is active. Roll when you face a challenge."); return; }
+  if (!st || !helpFor(sess, st)) { say("No quest is active. Roll when you face a challenge."); return; }
   const tier = prog.tier[st.id] || 0;
   if (prog.solved[st.id]) { say("This challenge is already beaten."); return; }
   if (tier >= 2) { say("The DM has given every hint. After 2 failed casts you can reveal the answer."); return; }
@@ -1293,6 +1322,21 @@ $("rollBtn").addEventListener("click", rollForHint);
 async function prepareSession(sid) {
   const sess = sessionOf(sid); const prog = P(sid);
   preparedFor = null;
+  if (sess.story) {
+    const st = S.stories[sid];
+    await webR.objs.globalEnv.bind(".scsv", st.dataset.csv || "");
+    await webR.objs.globalEnv.bind(".sname", st.dataset.name || "data");
+    try { await webR.evalRVoid(".setup_story(.scsv, .sname)"); }
+    catch (e) { const o = $("out"); if (o) { o.className = "out err"; o.textContent = "The story's data could not be read as CSV: " + e.message; } }
+    for (const ch of sess.chapters) {
+      if (ch.id >= prog.step) break;
+      const src = prog.code[ch.id] && !prog.code[ch.id].includes("____") ? prog.code[ch.id] : storyHelp(sid, ch.id)?.answer;
+      if (src) await rRun(src);
+    }
+    preparedFor = sid;
+    if (S.view === "session" && S.current === sid) { const rb = $("runBtn"); if (rb) rb.disabled = false; const vb = $("viewBtn"); if (vb) vb.disabled = false; const o = $("out"); if (o && o.textContent.startsWith("R is still")) o.textContent = "Output appears here."; }
+    return;
+  }
   await webR.evalRVoid(`.setup_${sid}()`);
   // Replay this session's solved steps so variables like `clean` exist again.
   for (const ch of sess.chapters) {
@@ -1342,5 +1386,15 @@ async function boot() {
 }
 
 load();
-render();
-boot();
+(async () => {
+  const q = new URLSearchParams(location.search).get("story");
+  if (q && S.name && S.cls) {
+    try { const st = await decodeStory(q); const id = await addStory(st); S.view = "stories"; save(); history.replaceState(null, "", location.pathname); } catch (e) { console.warn(e); }
+  } else if (q) { try { const st = await decodeStory(q); await addStory(st); history.replaceState(null, "", location.pathname); } catch (e) {} }
+  document.querySelectorAll("#modes [data-mode]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.mode === "stories") { S.view = "stories"; } else { S.view = "map"; }
+    save(); render(); window.scrollTo({ top: 0 });
+  }));
+  render();
+  boot();
+})();

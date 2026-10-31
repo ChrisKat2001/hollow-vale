@@ -218,3 +218,29 @@ pre.out.err { text-shadow: 0 0 6px rgba(255,107,94,.4); }
 .installbtn { position: fixed; right: 16px; bottom: 16px; z-index: 15; font-family: var(--display); font-size: 18px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--gold); background: #17131a; color: var(--gold); box-shadow: 0 6px 24px rgba(0,0,0,.6); }
 .installbtn:hover { background: var(--gold); color: var(--bg); }
 .installbtn[hidden] { display: none; }
+/* ---------- Modes & Story Mode ---------- */
+.modes { max-width: 1240px; margin: 0 auto 16px; padding: 0 20px; display: flex; gap: 8px; }
+.modes[hidden] { display: none; }
+.modes button { font-family: var(--display); font-size: 19px; padding: 8px 18px; border-radius: 999px; border: 1px solid var(--line); background: #0f0c11; color: var(--muted); }
+.modes button.on { color: var(--paper); border-color: var(--neon); box-shadow: 0 0 12px rgba(255,59,48,.3); }
+.storycode { width: 100%; background: #0a0809; border: 1px solid var(--line); color: var(--amber); font-family: var(--code); font-size: 13px; padding: 8px 10px; border-radius: 4px; resize: vertical; word-break: break-all; }
+.filebtn { display: inline-flex; align-items: center; }
+.storyrow { display: grid; gap: 4px; }
+.storyactions { display: flex; gap: 14px; padding: 0 4px 6px 66px; }
+.sharebox { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.sharebox[hidden] { display: none; }
+.editor .edgrid { display: grid; gap: 6px 0; }
+.editor label { font-family: var(--term); font-size: 19px; color: var(--paper); margin-top: 10px; display: block; }
+.editor label small { display: block; font-family: var(--body); font-size: 14px; color: var(--muted); }
+.editor input:not([type=checkbox]), .editor textarea { width: 100%; background: #0a0809; border: 1px solid var(--line); color: var(--paper); font-family: var(--body); font-size: 16px; padding: 8px 10px; border-radius: 4px; resize: vertical; }
+.editor textarea.codefield { font-family: var(--code); font-size: 14px; color: #f3e9d6; }
+.editor .chk { display: flex; gap: 8px; align-items: center; }
+.edhead { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.edtools { display: flex; gap: 12px; flex-wrap: wrap; }
+.edtools .reset:disabled { opacity: .35; text-decoration: none; cursor: default; }
+.edmore { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.edmore summary { cursor: pointer; font-family: var(--term); font-size: 18px; color: var(--gold); }
+.npcpick { display: flex; gap: 8px; flex-wrap: wrap; }
+.npcopt { background: #0f0c11; border: 1px solid var(--line); border-radius: 6px; padding: 6px; display: grid; justify-items: center; gap: 2px; color: var(--muted); font-size: 12px; }
+.npcopt canvas { width: 48px; height: 48px; image-rendering: pixelated; }
+.npcopt.picked { border-color: var(--gold); color: var(--gold); }

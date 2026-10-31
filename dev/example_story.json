@@ -1,0 +1,57 @@
+{
+ "format": 1,
+ "title": "The Baker's Dozen",
+ "author": "The Hollow Vale",
+ "npc": "maren",
+ "summary": "A short example story: averages, groups and a boxplot.",
+ "intro": "Old Brannoch the baker can't sleep. Some mornings his shelves empty by noon. Other mornings, half his bread goes stale.\n\nHe has kept a tally of four weeks of sales. It is loaded as `bakery`.",
+ "dataset": {
+  "name": "bakery",
+  "csv": "day,weekday,rain,loaves_sold\n1,Mon,yes,30\n2,Tue,no,35\n3,Wed,yes,38\n4,Thu,yes,41\n5,Fri,yes,49\n6,Sat,yes,55\n7,Sun,no,56\n8,Mon,yes,36\n9,Tue,no,44\n10,Wed,yes,33\n11,Thu,no,50\n12,Fri,no,59\n13,Sat,no,63\n14,Sun,no,55\n15,Mon,no,39\n16,Tue,yes,28\n17,Wed,no,48\n18,Thu,yes,42\n19,Fri,yes,50\n20,Sat,no,66\n21,Sun,no,63\n22,Mon,no,46\n23,Tue,yes,29\n24,Wed,no,47\n25,Thu,no,46\n26,Fri,no,57\n27,Sat,no,66\n28,Sun,no,58"
+ },
+ "ending": "Brannoch bakes less on rainy days and more on Saturdays. For the first time in years, nothing goes stale.\n\nThis story was written in the DM editor. Open it there to see how each step is built, then write your own.",
+ "chapters": [
+  {
+   "title": "The Tally",
+   "story": "Brannoch slides the tally across the counter. *How much do I sell on a normal day?*",
+   "task": "Store the average of `loaves_sold` in `avg_loaves`.",
+   "starter": "head(bakery)\n\navg_loaves <- ____(bakery$loaves_sold)\navg_loaves",
+   "check": "exists(\"avg_loaves\") && abs(avg_loaves - mean(bakery$loaves_sold)) < 1e-6",
+   "fail": "avg_loaves should be the mean of the loaves_sold column.",
+   "nudge": "You need the centre of a column. Look in **Summaries & groups**.",
+   "clue": "The function is `mean()`.",
+   "answer": "head(bakery)\n\navg_loaves <- mean(bakery$loaves_sold)\navg_loaves",
+   "lesson": "The mean is a first summary. On its own it hides how much sales change from day to day."
+  },
+  {
+   "title": "Rain on the Roof",
+   "story": "*When it rains, nobody comes,* Brannoch grumbles. *Or do they?*",
+   "task": "Draw a boxplot of `loaves_sold` by `rain`. Then store the average per rain group in `by_rain`.",
+   "starter": "boxplot(loaves_sold ~ rain, data = bakery, col = c(2, 1))\n\nby_rain <- tapply(bakery$loaves_sold, bakery$____, mean)\nby_rain",
+   "check": "n_plots > 0 && exists(\"by_rain\") && isTRUE(all.equal(as.numeric(by_rain), as.numeric(tapply(bakery$loaves_sold, bakery$rain, mean))))",
+   "fail": "Draw the boxplot, and group the averages by the rain column.",
+   "nudge": "Group the sales by the column that says whether it rained.",
+   "clue": "The column is `rain`.",
+   "answer": "boxplot(loaves_sold ~ rain, data = bakery, col = c(2, 1))\n\nby_rain <- tapply(bakery$loaves_sold, bakery$rain, mean)\nby_rain",
+   "lesson": "Comparing groups shows where the difference lives. Here rainy days sell clearly less.",
+   "question": "Rainy days sold fewer loaves on average. What can Brannoch safely conclude?",
+   "options": "*Rain is linked to lower sales, so he could bake a little less when it rains\nRain causes exactly 9 fewer sales every time\nRainy days don't matter at all",
+   "why": "Right. The pattern is clear and useful for planning, but it is an average, not an exact rule for every day."
+  },
+  {
+   "title": "The Stale Spirit",
+   "boss": true,
+   "bossName": "The Stale Spirit",
+   "bossArt": "gremlin",
+   "story": "A musty spirit rises from the bread bin. *Bake the same every day,* it whispers, *and I shall feast.*",
+   "task": "Find the weekday with the highest average sales. Store its name in `best_day`.",
+   "starter": "avg_day <- tapply(bakery$loaves_sold, bakery$weekday, mean)\nsort(avg_day)\n\nbest_day <- names(____(avg_day))\nbest_day",
+   "check": "exists(\"best_day\") && identical(unname(best_day), names(which.max(tapply(bakery$loaves_sold, bakery$weekday, mean))))",
+   "fail": "best_day should be the name of the weekday with the highest average.",
+   "nudge": "You want the label of the largest value.",
+   "clue": "Use `which.max()` inside `names()`.",
+   "answer": "avg_day <- tapply(bakery$loaves_sold, bakery$weekday, mean)\nsort(avg_day)\n\nbest_day <- names(which.max(avg_day))\nbest_day",
+   "lesson": "Weekly patterns are a kind of seasonality. Planning by weekday is how shops avoid waste."
+  }
+ ]
+}

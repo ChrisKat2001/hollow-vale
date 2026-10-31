@@ -2,7 +2,7 @@ import re, sys
 APP_MODE = '--app' in sys.argv
 css = open('/tmp/base.css').read() + open('src/extra.css').read()
 r = open('src/r_setup.R').read()
-js = open('src/sprites.js').read() + '\n' + open('src/spellbook.js').read() + '\n' + open('src/hints.js').read() + '\n' + open('src/interpret.js').read() + '\n' + open('src/app.js').read()
+js = open('src/sprites.js').read() + '\n' + open('src/spellbook.js').read() + '\n' + open('src/hints.js').read() + '\n' + open('src/interpret.js').read() + '\n' + 'const EXAMPLE_STORY = ' + open('src/example_story.json').read() + ';\n' + open('src/story.js').read() + '\n' + open('src/app.js').read()
 assert '`' not in r and '${' not in r
 APP_HEAD = """
 <meta name="theme-color" content="#0d0b0e">
@@ -35,6 +35,10 @@ html = f'''<!DOCTYPE html>
   <div id="status" class="status">Summoning R… (first load can take 20–60 s)</div>
 </header>
 
+<nav class="modes" id="modes" hidden aria-label="Game mode">
+  <button data-mode="map">🗺 Campaign</button>
+  <button data-mode="stories">📜 Story Mode</button>
+</nav>
 <main>
   <section>
     <div class="track" id="track"></div>

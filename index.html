@@ -441,6 +441,32 @@ pre.out.err { text-shadow: 0 0 6px rgba(255,107,94,.4); }
 .installbtn { position: fixed; right: 16px; bottom: 16px; z-index: 15; font-family: var(--display); font-size: 18px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--gold); background: #17131a; color: var(--gold); box-shadow: 0 6px 24px rgba(0,0,0,.6); }
 .installbtn:hover { background: var(--gold); color: var(--bg); }
 .installbtn[hidden] { display: none; }
+/* ---------- Modes & Story Mode ---------- */
+.modes { max-width: 1240px; margin: 0 auto 16px; padding: 0 20px; display: flex; gap: 8px; }
+.modes[hidden] { display: none; }
+.modes button { font-family: var(--display); font-size: 19px; padding: 8px 18px; border-radius: 999px; border: 1px solid var(--line); background: #0f0c11; color: var(--muted); }
+.modes button.on { color: var(--paper); border-color: var(--neon); box-shadow: 0 0 12px rgba(255,59,48,.3); }
+.storycode { width: 100%; background: #0a0809; border: 1px solid var(--line); color: var(--amber); font-family: var(--code); font-size: 13px; padding: 8px 10px; border-radius: 4px; resize: vertical; word-break: break-all; }
+.filebtn { display: inline-flex; align-items: center; }
+.storyrow { display: grid; gap: 4px; }
+.storyactions { display: flex; gap: 14px; padding: 0 4px 6px 66px; }
+.sharebox { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.sharebox[hidden] { display: none; }
+.editor .edgrid { display: grid; gap: 6px 0; }
+.editor label { font-family: var(--term); font-size: 19px; color: var(--paper); margin-top: 10px; display: block; }
+.editor label small { display: block; font-family: var(--body); font-size: 14px; color: var(--muted); }
+.editor input:not([type=checkbox]), .editor textarea { width: 100%; background: #0a0809; border: 1px solid var(--line); color: var(--paper); font-family: var(--body); font-size: 16px; padding: 8px 10px; border-radius: 4px; resize: vertical; }
+.editor textarea.codefield { font-family: var(--code); font-size: 14px; color: #f3e9d6; }
+.editor .chk { display: flex; gap: 8px; align-items: center; }
+.edhead { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.edtools { display: flex; gap: 12px; flex-wrap: wrap; }
+.edtools .reset:disabled { opacity: .35; text-decoration: none; cursor: default; }
+.edmore { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.edmore summary { cursor: pointer; font-family: var(--term); font-size: 18px; color: var(--gold); }
+.npcpick { display: flex; gap: 8px; flex-wrap: wrap; }
+.npcopt { background: #0f0c11; border: 1px solid var(--line); border-radius: 6px; padding: 6px; display: grid; justify-items: center; gap: 2px; color: var(--muted); font-size: 12px; }
+.npcopt canvas { width: 48px; height: 48px; image-rendering: pixelated; }
+.npcopt.picked { border-color: var(--gold); color: var(--gold); }
 </style>
 </head>
 <body>
@@ -452,6 +478,10 @@ pre.out.err { text-shadow: 0 0 6px rgba(255,107,94,.4); }
   <div id="status" class="status">Summoning R… (first load can take 20–60 s)</div>
 </header>
 
+<nav class="modes" id="modes" hidden aria-label="Game mode">
+  <button data-mode="map">🗺 Campaign</button>
+  <button data-mode="stories">📜 Story Mode</button>
+</nav>
 <main>
   <section>
     <div class="track" id="track"></div>
@@ -1030,6 +1060,26 @@ G <- new.env(parent = globalenv())
   top <- exp$segment[which.max(exp$luxury_share)]
   if (!isTRUE(as.numeric(G$nobles) == top)) return(.say(FALSE, "That is not the segment with the highest luxury_share."))
   .say(TRUE, sprintf("Segment %d are the Nobles: about %.0f gold per basket, %.0f%% luxury goods, but only %.1f visits a month.", top, exp$basket_gold[top], 100 * exp$luxury_share[top], exp$visits_per_month[top]))
+}
+
+## ---------- Story Mode (stories written by a human DM) ----------
+.setup_story <- function(csv, name) {
+  G <<- new.env(parent = globalenv())
+  if (nzchar(csv)) {
+    d <- utils::read.csv(text = csv, stringsAsFactors = FALSE, check.names = TRUE)
+    assign(if (nzchar(name)) make.names(name) else "data", d, envir = G)
+  }
+  invisible(TRUE)
+}
+.check_story <- function(expr, fail_msg, nimg) {
+  if (!nzchar(trimws(expr))) return(.say(TRUE, "The DM set no check for this step. Well cast."))
+  env <- new.env(parent = G)
+  env$n_plots <- nimg
+  v <- tryCatch(eval(parse(text = expr), env), error = function(e) structure(conditionMessage(e), class = "check_error"))
+  if (inherits(v, "check_error")) return(.say(FALSE, paste0("Not yet. (The check needs something that isn't there yet: ", v, ")")))
+  if (isTRUE(v)) return(.say(TRUE, "The DM nods. That's exactly it."))
+  if (is.character(v) && length(v) == 1) return(.say(FALSE, v))
+  .say(FALSE, if (nzchar(fail_msg)) fail_msg else "Not quite. Read the task again, or roll for a hint.")
 }
 `;
 /* ---------- Pixel art: bosses, NPCs and heroes (16 x 16, drawn on canvas) ---------- */
@@ -1774,6 +1824,356 @@ const INTERPRET = {
 };
 const INTERP_XP = 25;
 
+const EXAMPLE_STORY = {
+ "format": 1,
+ "title": "The Baker's Dozen",
+ "author": "The Hollow Vale",
+ "npc": "maren",
+ "summary": "A short example story: averages, groups and a boxplot.",
+ "intro": "Old Brannoch the baker can't sleep. Some mornings his shelves empty by noon. Other mornings, half his bread goes stale.\n\nHe has kept a tally of four weeks of sales. It is loaded as `bakery`.",
+ "dataset": {
+  "name": "bakery",
+  "csv": "day,weekday,rain,loaves_sold\n1,Mon,yes,30\n2,Tue,no,35\n3,Wed,yes,38\n4,Thu,yes,41\n5,Fri,yes,49\n6,Sat,yes,55\n7,Sun,no,56\n8,Mon,yes,36\n9,Tue,no,44\n10,Wed,yes,33\n11,Thu,no,50\n12,Fri,no,59\n13,Sat,no,63\n14,Sun,no,55\n15,Mon,no,39\n16,Tue,yes,28\n17,Wed,no,48\n18,Thu,yes,42\n19,Fri,yes,50\n20,Sat,no,66\n21,Sun,no,63\n22,Mon,no,46\n23,Tue,yes,29\n24,Wed,no,47\n25,Thu,no,46\n26,Fri,no,57\n27,Sat,no,66\n28,Sun,no,58"
+ },
+ "ending": "Brannoch bakes less on rainy days and more on Saturdays. For the first time in years, nothing goes stale.\n\nThis story was written in the DM editor. Open it there to see how each step is built, then write your own.",
+ "chapters": [
+  {
+   "title": "The Tally",
+   "story": "Brannoch slides the tally across the counter. *How much do I sell on a normal day?*",
+   "task": "Store the average of `loaves_sold` in `avg_loaves`.",
+   "starter": "head(bakery)\n\navg_loaves <- ____(bakery$loaves_sold)\navg_loaves",
+   "check": "exists(\"avg_loaves\") && abs(avg_loaves - mean(bakery$loaves_sold)) < 1e-6",
+   "fail": "avg_loaves should be the mean of the loaves_sold column.",
+   "nudge": "You need the centre of a column. Look in **Summaries & groups**.",
+   "clue": "The function is `mean()`.",
+   "answer": "head(bakery)\n\navg_loaves <- mean(bakery$loaves_sold)\navg_loaves",
+   "lesson": "The mean is a first summary. On its own it hides how much sales change from day to day."
+  },
+  {
+   "title": "Rain on the Roof",
+   "story": "*When it rains, nobody comes,* Brannoch grumbles. *Or do they?*",
+   "task": "Draw a boxplot of `loaves_sold` by `rain`. Then store the average per rain group in `by_rain`.",
+   "starter": "boxplot(loaves_sold ~ rain, data = bakery, col = c(2, 1))\n\nby_rain <- tapply(bakery$loaves_sold, bakery$____, mean)\nby_rain",
+   "check": "n_plots > 0 && exists(\"by_rain\") && isTRUE(all.equal(as.numeric(by_rain), as.numeric(tapply(bakery$loaves_sold, bakery$rain, mean))))",
+   "fail": "Draw the boxplot, and group the averages by the rain column.",
+   "nudge": "Group the sales by the column that says whether it rained.",
+   "clue": "The column is `rain`.",
+   "answer": "boxplot(loaves_sold ~ rain, data = bakery, col = c(2, 1))\n\nby_rain <- tapply(bakery$loaves_sold, bakery$rain, mean)\nby_rain",
+   "lesson": "Comparing groups shows where the difference lives. Here rainy days sell clearly less.",
+   "question": "Rainy days sold fewer loaves on average. What can Brannoch safely conclude?",
+   "options": "*Rain is linked to lower sales, so he could bake a little less when it rains\nRain causes exactly 9 fewer sales every time\nRainy days don't matter at all",
+   "why": "Right. The pattern is clear and useful for planning, but it is an average, not an exact rule for every day."
+  },
+  {
+   "title": "The Stale Spirit",
+   "boss": true,
+   "bossName": "The Stale Spirit",
+   "bossArt": "gremlin",
+   "story": "A musty spirit rises from the bread bin. *Bake the same every day,* it whispers, *and I shall feast.*",
+   "task": "Find the weekday with the highest average sales. Store its name in `best_day`.",
+   "starter": "avg_day <- tapply(bakery$loaves_sold, bakery$weekday, mean)\nsort(avg_day)\n\nbest_day <- names(____(avg_day))\nbest_day",
+   "check": "exists(\"best_day\") && identical(unname(best_day), names(which.max(tapply(bakery$loaves_sold, bakery$weekday, mean))))",
+   "fail": "best_day should be the name of the weekday with the highest average.",
+   "nudge": "You want the label of the largest value.",
+   "clue": "Use `which.max()` inside `names()`.",
+   "answer": "avg_day <- tapply(bakery$loaves_sold, bakery$weekday, mean)\nsort(avg_day)\n\nbest_day <- names(which.max(avg_day))\nbest_day",
+   "lesson": "Weekly patterns are a kind of seasonality. Planning by weekday is how shops avoid waste."
+  }
+ ]
+};
+/* ---------- Story Mode: stories written by a human DM ---------- */
+const STORY_NPCS = ["thessaly", "maren", "seer", "ilsa", "odo", "agathe"];
+const STORY_BOSSES = ["goblin", "gremlin", "ward", "siren", "wraith", "hydra", "crowd"];
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV"];
+const STAT_ROTA = ["wrangling", "sight", "modeling", "wisdom"];
+
+/* Safe formatting for text written by DMs: everything is escaped, then `code`, **bold** and *italic* are allowed. */
+function fmt(text) {
+  return esc(text || "")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+}
+const paras = (text) => String(text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map(fmt);
+
+/* Share codes: "HV1." + base64url(gzip(JSON)) */
+async function encodeStory(story) {
+  const bytes = new TextEncoder().encode(JSON.stringify(story));
+  const gz = await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+  let bin = ""; const u = new Uint8Array(gz);
+  for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return "HV1." + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+async function decodeStory(code) {
+  code = String(code || "").trim();
+  if (code.startsWith("{")) return validateStory(JSON.parse(code));
+  if (!code.startsWith("HV1.")) throw new Error("This doesn't look like a story code. It should start with HV1.");
+  const b64 = code.slice(4).replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64 + "===".slice((b64.length + 3) % 4));
+  const u = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  const txt = await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  return validateStory(JSON.parse(txt));
+}
+function validateStory(st) {
+  if (!st || typeof st !== "object" || !Array.isArray(st.chapters) || !st.chapters.length) throw new Error("This story has no chapters.");
+  const s = (v, n = 4000) => String(v ?? "").slice(0, n);
+  return {
+    format: 1,
+    title: s(st.title, 80) || "Untitled story", author: s(st.author, 60), npc: STORY_NPCS.includes(st.npc) ? st.npc : "thessaly",
+    summary: s(st.summary, 200), intro: s(st.intro), ending: s(st.ending),
+    dataset: { name: s(st.dataset?.name, 40) || "data", csv: s(st.dataset?.csv, 2000000) },
+    chapters: st.chapters.slice(0, 15).map((c) => ({
+      title: s(c.title, 80) || "Untitled chapter", story: s(c.story), task: s(c.task, 1500), starter: s(c.starter, 6000),
+      check: s(c.check, 3000), fail: s(c.fail, 400), nudge: s(c.nudge, 800), clue: s(c.clue, 800), answer: s(c.answer, 6000),
+      lesson: s(c.lesson, 1500), boss: !!c.boss, bossName: s(c.bossName, 60), bossArt: STORY_BOSSES.includes(c.bossArt) ? c.bossArt : "goblin",
+      question: s(c.question, 600), options: s(c.options, 1500), why: s(c.why, 800),
+    })),
+  };
+}
+async function storyId(story) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(story)));
+  return "st_" + [...new Uint8Array(buf)].slice(0, 6).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/* Turn a stored story into the session shape the chapter engine plays. */
+function storyToSession(id, st) {
+  if (!st) return null;
+  return {
+    id, story: true, npc: st.npc, num: "★", title: st.title, place: "Story", topic: st.author ? `by ${st.author}` : "",
+    intro: st.intro,
+    chapters: st.chapters.map((c, i) => ({
+      id: i + 1, short: `${ROMAN[i] || i + 1} · ${c.title}`.slice(0, 32), title: `Chapter ${ROMAN[i] || i + 1} · ${c.title}`,
+      stat: STAT_ROTA[i % 4], graphics: true, npc: st.npc,
+      story: [...(i === 0 ? paras(st.intro) : []), ...paras(c.story)],
+      task: fmt(c.task), starter: c.starter || "# Write your spell here\n",
+      lesson: c.lesson ? `<b>Lesson:</b> ${fmt(c.lesson)}` : "<b>Well done.</b>",
+      enemy: c.boss ? { name: c.bossName || "The Shadow", hp: 10, note: "Set by your DM.", art: c.bossArt } : null,
+      check: c.check, fail: c.fail,
+    })),
+    epilogue: () => paras(st.ending || "The story ends here. Thanks for playing.").map((p) => `<p>${p}</p>`).join(""),
+    summary: st.summary ? fmt(st.summary) : "",
+  };
+}
+function storyHelp(sid, chId) {
+  const c = S.stories?.[sid]?.chapters?.[chId - 1]; if (!c) return null;
+  if (!c.nudge && !c.clue && !c.answer) return null;
+  return { nudge: fmt(c.nudge || "Re-read the task. The spellbook can help."), clue: fmt(c.clue || c.nudge || "Search the spellbook for the key word in the task."), answer: c.answer || "", why: fmt(c.lesson || "") };
+}
+function storyInterp(sid, chId) {
+  const c = S.stories?.[sid]?.chapters?.[chId - 1]; if (!c || !c.question || !c.options) return null;
+  const lines = c.options.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6);
+  if (lines.length < 2 || !lines.some((l) => l.startsWith("*"))) return null;
+  return {
+    q: fmt(c.question),
+    options: lines.map((l, k) => {
+      const ok = l.startsWith("*");
+      return { v: String.fromCharCode(97 + k), t: l.replace(/^\*\s*/, ""), ok, why: ok ? fmt(c.why || "That's right.") : "Not this one. Think about what the result really shows." };
+    }),
+  };
+}
+
+/* ---------- Story Mode screen ---------- */
+function renderStories() {
+  $("track").innerHTML = "";
+  const list = Object.entries(S.stories || {}).filter(([id]) => id !== "st_test");
+  $("stage").innerHTML = `
+    <div class="card">
+      <div class="chead"><canvas class="portrait" id="npcArt" width="64" height="64" aria-hidden="true"></canvas>
+        <div><div class="dm-label">STORY MODE</div><h2 class="chapter">Tales from other tables</h2>
+        <div class="npcname">Stories written by a Dungeon Master: a teacher, a friend, or you.</div></div></div>
+      <div class="narration"><p>In Story Mode, a human DM writes the adventure: the scenes, the data and the challenges. Load a story someone shared with you, or open the editor and write your own.</p></div>
+      <div class="actions" style="padding:6px 0 0;border:0">
+        <button class="btn red" id="newStory">✒️ Write a story</button>
+        <button class="btn ghost" id="exampleStory">Try the example story</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="dm-label">LOAD A STORY</div>
+      <p class="fbintro">Paste the story code your DM gave you, or open a story file.</p>
+      <textarea id="storyCode" class="storycode" rows="3" placeholder="HV1.…" spellcheck="false" autocapitalize="off"></textarea>
+      <div class="actions" style="padding:8px 0 0;border:0">
+        <button class="btn" id="loadCode">Load story</button>
+        <label class="btn ghost filebtn">Open a file<input type="file" id="storyFile" accept=".json,.hvstory,.txt,application/json,text/plain" hidden></label>
+        <span class="fbstatus" id="loadStatus" role="status"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="dm-label">YOUR STORIES</div>
+      ${list.length ? `<div class="sessions" style="padding:8px 0 0">${list.map(([id, st]) => {
+        const p = S.progress[id]; const done = p?.done;
+        return `<div class="storyrow">
+          <button class="sess ${done ? "done" : "open"}" data-play="${id}"><span class="badge">★</span>
+            <span><strong>${esc(st.title)}</strong><span>${st.author ? "by " + esc(st.author) + " · " : ""}${st.chapters.length} chapter${st.chapters.length > 1 ? "s" : ""}${st.summary ? " · " + esc(st.summary) : ""}</span></span>
+            <span class="state">${done ? "✓ replay" : p && p.step > 1 ? "▶ continue" : "▶ play"}</span></button>
+          <div class="storyactions"><button class="reset" data-edit="${id}">Edit</button><button class="reset" data-share="${id}">Share</button><button class="reset" data-del="${id}">Remove</button></div>
+        </div>`; }).join("")}</div>` : `<p class="fbintro" style="margin-top:8px">No stories yet. Load one above, try the example, or write your own.</p>`}
+      <div class="sharebox" id="sharebox" hidden></div>
+    </div>`;
+  drawSprite($("npcArt"), "thessaly");
+  $("newStory").addEventListener("click", () => openEditor(null));
+  $("exampleStory").addEventListener("click", async () => { const id = await addStory(EXAMPLE_STORY); openSession(id); });
+  $("loadCode").addEventListener("click", async () => {
+    try { const st = await decodeStory($("storyCode").value); const id = await addStory(st); $("loadStatus").textContent = `Loaded “${st.title}”.`; render(); }
+    catch (e) { $("loadStatus").textContent = "Couldn't load it: " + e.message; }
+  });
+  $("storyFile").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const st = await decodeStory(await f.text()); await addStory(st); render(); }
+    catch (err) { $("loadStatus").textContent = "Couldn't open that file: " + err.message; }
+  });
+  document.querySelectorAll("[data-play]").forEach((b) => b.addEventListener("click", () => openSession(b.dataset.play)));
+  document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openEditor(b.dataset.edit)));
+  document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.armed) { delete S.stories[b.dataset.del]; delete S.progress[b.dataset.del]; save(); render(); }
+    else { b.dataset.armed = "1"; b.textContent = "Click again to remove"; }
+  }));
+  document.querySelectorAll("[data-share]").forEach((b) => b.addEventListener("click", () => showShare(b.dataset.share)));
+}
+async function addStory(st) {
+  const clean = validateStory(st);
+  const id = await storyId(clean);
+  S.stories = Object.assign({}, S.stories, { [id]: clean }); save();
+  return id;
+}
+async function showShare(id) {
+  const st = S.stories[id]; const box = $("sharebox"); if (!st || !box) return;
+  const code = await encodeStory(st);
+  const link = location.protocol.startsWith("http") && !window.claude?.use ? `${location.origin}${location.pathname}?story=${code}` : "";
+  box.hidden = false;
+  box.innerHTML = `<div class="dm-label">SHARE “${esc(st.title)}”</div>
+    <p class="fbintro">Send this code to your players. They paste it in <b>Load a story</b>. It contains the whole story, data included (${Math.round(code.length / 1024)} KB).</p>
+    <textarea class="storycode" rows="3" readonly id="shareCode">${esc(code)}</textarea>
+    <div class="actions" style="padding:8px 0 0;border:0">
+      <button class="btn" id="copyCode">Copy code</button>
+      ${link && link.length < 8000 ? `<button class="btn ghost" id="copyLink">Copy a direct link</button>` : ""}
+      <span class="fbstatus" id="shareStatus" role="status"></span>
+    </div>`;
+  const copy = async (text, what) => { try { await navigator.clipboard.writeText(text); $("shareStatus").textContent = `${what} copied.`; } catch (e) { $("shareCode").select(); $("shareStatus").textContent = "Copy was blocked. Select the code and copy it by hand."; } };
+  $("copyCode").addEventListener("click", () => copy(code, "Code"));
+  if ($("copyLink")) $("copyLink").addEventListener("click", () => copy(link, "Link"));
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/* ---------- DM editor ---------- */
+let ED = null, edId = null;
+const blankChapter = () => ({ title: "", story: "", task: "", starter: "", check: "", fail: "", nudge: "", clue: "", answer: "", lesson: "", boss: false, bossName: "", bossArt: "goblin", question: "", options: "", why: "" });
+function openEditor(id) {
+  edId = id;
+  ED = id && S.stories[id] ? JSON.parse(JSON.stringify(S.stories[id])) : { format: 1, title: "", author: "", npc: "thessaly", summary: "", intro: "", ending: "", dataset: { name: "data", csv: "" }, chapters: [blankChapter()] };
+  S.view = "editor"; save(); render(); window.scrollTo({ top: 0 });
+}
+function edField(label, key, val, opts = {}) {
+  const id = "ed_" + key.replace(/\W/g, "_");
+  const help = opts.help ? `<small>${opts.help}</small>` : "";
+  if (opts.area) return `<label for="${id}">${label}${help}</label><textarea id="${id}" data-k="${key}" rows="${opts.rows || 3}" class="${opts.code ? "codefield" : ""}" spellcheck="${opts.code ? "false" : "true"}" placeholder="${esc(opts.ph || "")}">${esc(val)}</textarea>`;
+  return `<label for="${id}">${label}${help}</label><input id="${id}" data-k="${key}" value="${esc(val)}" placeholder="${esc(opts.ph || "")}">`;
+}
+function renderEditor() {
+  $("track").innerHTML = `<button class="backlink" id="edBack">← Story Mode</button>`;
+  $("edBack").addEventListener("click", () => { S.view = "stories"; save(); render(); });
+  const csvRows = ED.dataset.csv ? ED.dataset.csv.trim().split("\n").length - 1 : 0;
+  $("stage").innerHTML = `
+    <div class="card editor">
+      <div class="dm-label">THE DM'S DESK</div>
+      <h2 class="chapter">${edId ? "Edit your story" : "Write a new story"}</h2>
+      <p class="fbintro">Fill in the story, add your data and write each challenge. Use \`backticks\` for code, *stars* for italics and **double stars** for bold. Your work is saved in this browser as you go.</p>
+      <div class="edgrid">
+        ${edField("Title", "title", ED.title, { ph: "The Baker's Dozen" })}
+        ${edField("Your name as DM", "author", ED.author, { ph: "Dr. Example" })}
+        ${edField("One-line summary", "summary", ED.summary, { ph: "Averages, groups and a boxplot" })}
+        <label>Guide character<small>Shown next to every chapter.</small></label>
+        <div class="npcpick">${STORY_NPCS.map((n) => `<button type="button" class="npcopt ${ED.npc === n ? "picked" : ""}" data-npc="${n}" title="${esc(NPC_NAMES[n])}"><canvas width="48" height="48" data-art="${n}"></canvas><span>${esc(NPC_NAMES[n].split(",")[0])}</span></button>`).join("")}</div>
+        ${edField("Opening", "intro", ED.intro, { area: true, rows: 4, ph: "Set the scene. Say what the data is called." })}
+      </div>
+    </div>
+    <div class="card editor">
+      <div class="dm-label">THE DATA</div>
+      <div class="edgrid">
+        ${edField("Name of the data frame in R", "dataset.name", ED.dataset.name, { ph: "bakery", help: "Players will type this name." })}
+        <label>CSV data<small>${csvRows ? `${csvRows} rows loaded.` : "First row = column names."}</small></label>
+        <div><label class="btn ghost filebtn small">Upload a CSV file<input type="file" id="csvFile" accept=".csv,text/csv,text/plain" hidden></label></div>
+        ${edField("…or paste it here", "dataset.csv", ED.dataset.csv, { area: true, rows: 5, code: true, ph: "day,weekday,sales\n1,Mon,42" })}
+      </div>
+    </div>
+    ${ED.chapters.map((c, i) => `
+    <div class="card editor chapterbox">
+      <div class="edhead"><div class="dm-label">CHAPTER ${ROMAN[i] || i + 1}</div>
+        <div class="edtools">
+          <button class="reset" data-move="${i}:-1" ${i ? "" : "disabled"}>↑ Up</button>
+          <button class="reset" data-move="${i}:1" ${i < ED.chapters.length - 1 ? "" : "disabled"}>↓ Down</button>
+          <button class="reset" data-test="${i}">Test this chapter</button>
+          ${ED.chapters.length > 1 ? `<button class="reset" data-rm="${i}">Delete</button>` : ""}
+        </div></div>
+      <div class="edgrid">
+        ${edField("Chapter title", `ch.${i}.title`, c.title)}
+        ${edField("Story", `ch.${i}.story`, c.story, { area: true, rows: 3, ph: "What happens. What the characters say." })}
+        ${edField("Task", `ch.${i}.task`, c.task, { area: true, rows: 2, ph: "Store the average of `sales` in `avg_sales`." })}
+        ${edField("Starter code", `ch.${i}.starter`, c.starter, { area: true, rows: 5, code: true, help: "Use ____ for blanks the player fills in.", ph: "avg_sales <- ____(data$sales)" })}
+        ${edField("Check", `ch.${i}.check`, c.check, { area: true, rows: 2, code: true, help: "An R condition that is TRUE when the task is solved. <code>n_plots</code> is the number of charts drawn.", ph: "exists(\"avg_sales\") && abs(avg_sales - mean(data$sales)) < 1e-6" })}
+        ${edField("Message when the check fails", `ch.${i}.fail`, c.fail, { ph: "avg_sales should be the mean of sales." })}
+        ${edField("Hint 1: nudge", `ch.${i}.nudge`, c.nudge, { ph: "Where to look, without the answer." })}
+        ${edField("Hint 2: clue", `ch.${i}.clue`, c.clue, { ph: "Which function or column." })}
+        ${edField("Answer (revealed after 2 failed casts)", `ch.${i}.answer`, c.answer, { area: true, rows: 4, code: true })}
+        ${edField("Lesson", `ch.${i}.lesson`, c.lesson, { area: true, rows: 2, ph: "What the player should take away." })}
+        <details class="edmore" ${c.question || c.boss ? "open" : ""}><summary>Optional: boss fight and interpretation question</summary>
+          <div class="edgrid">
+            <label class="chk"><input type="checkbox" data-k="ch.${i}.boss" ${c.boss ? "checked" : ""}> This chapter is a boss fight</label>
+            ${edField("Boss name", `ch.${i}.bossName`, c.bossName, { ph: "The Stale Spirit" })}
+            <label>Boss look</label>
+            <div class="npcpick">${STORY_BOSSES.map((b) => `<button type="button" class="npcopt ${c.bossArt === b ? "picked" : ""}" data-boss="${i}:${b}"><canvas width="48" height="48" data-art="${b}"></canvas></button>`).join("")}</div>
+            ${edField("Question after the code works", `ch.${i}.question`, c.question, { ph: "What can we safely conclude?" })}
+            ${edField("Answer options, one per line, start the correct one with *", `ch.${i}.options`, c.options, { area: true, rows: 3, ph: "*The correct answer\nA common mistake\nAnother mistake" })}
+            ${edField("Why the correct answer is right", `ch.${i}.why`, c.why, { area: true, rows: 2 })}
+          </div></details>
+      </div>
+    </div>`).join("")}
+    <div class="card editor">
+      <button class="btn ghost" id="addCh" ${ED.chapters.length >= 15 ? "disabled" : ""}>+ Add a chapter</button>
+      <div class="edgrid" style="margin-top:14px">${edField("Ending", "ending", ED.ending, { area: true, rows: 3, ph: "How the story ends." })}</div>
+      <div class="actions" style="padding:14px 0 0;border:0">
+        <button class="btn red" id="saveStory">Save story</button>
+        <button class="btn" id="playStory">Save and play</button>
+        <span class="fbstatus" id="edStatus" role="status"></span>
+      </div>
+    </div>`;
+  document.querySelectorAll(".editor canvas[data-art]").forEach((cv) => drawSprite(cv, cv.dataset.art));
+  const setK = (k, v) => {
+    if (k.startsWith("ch.")) { const [, i, f] = k.split("."); ED.chapters[+i][f] = v; }
+    else if (k.startsWith("dataset.")) ED.dataset[k.split(".")[1]] = v;
+    else ED[k] = v;
+    try { localStorage.setItem(KEY + "-draft", JSON.stringify({ id: edId, ED })); } catch (e) {}
+  };
+  document.querySelectorAll(".editor [data-k]").forEach((el) => el.addEventListener(el.type === "checkbox" ? "change" : "input", () => setK(el.dataset.k, el.type === "checkbox" ? el.checked : el.value)));
+  document.querySelectorAll("[data-npc]").forEach((b) => b.addEventListener("click", () => { ED.npc = b.dataset.npc; renderEditor(); }));
+  document.querySelectorAll("[data-boss]").forEach((b) => b.addEventListener("click", () => { const [i, art] = b.dataset.boss.split(":"); ED.chapters[+i].bossArt = art; ED.chapters[+i].boss = true; renderEditor(); }));
+  document.querySelectorAll("[data-move]").forEach((b) => b.addEventListener("click", () => { const [i, d] = b.dataset.move.split(":").map(Number); const ch = ED.chapters.splice(i, 1)[0]; ED.chapters.splice(i + d, 0, ch); renderEditor(); }));
+  document.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.armed) { ED.chapters.splice(+b.dataset.rm, 1); renderEditor(); } else { b.dataset.armed = "1"; b.textContent = "Click again to delete"; }
+  }));
+  document.querySelectorAll("[data-test]").forEach((b) => b.addEventListener("click", () => testChapter(+b.dataset.test)));
+  $("addCh").addEventListener("click", () => { ED.chapters.push(blankChapter()); renderEditor(); window.scrollTo({ top: document.body.scrollHeight }); });
+  $("csvFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; ED.dataset.csv = (await f.text()).replace(/\r\n/g, "\n"); renderEditor(); });
+  const saveIt = async () => {
+    if (!ED.title.trim()) { $("edStatus").textContent = "Give your story a title first."; return null; }
+    if (!ED.chapters.some((c) => c.task.trim())) { $("edStatus").textContent = "Write at least one task."; return null; }
+    const clean = validateStory(ED);
+    const id = await storyId(clean);
+    const stories = Object.assign({}, S.stories);
+    if (edId && edId !== id) { delete stories[edId]; if (S.progress[edId]) { S.progress[id] = S.progress[edId]; delete S.progress[edId]; } }
+    stories[id] = clean; S.stories = stories; edId = id; save();
+    try { localStorage.removeItem(KEY + "-draft"); } catch (e) {}
+    $("edStatus").textContent = "Saved.";
+    return id;
+  };
+  $("saveStory").addEventListener("click", saveIt);
+  $("playStory").addEventListener("click", async () => { const id = await saveIt(); if (id) { S.progress[id] = freshProgress(); openSession(id); } });
+}
+async function testChapter(i) {
+  const id = await (async () => { const clean = validateStory(Object.assign({}, ED, { title: ED.title || "Test" })); const tid = "st_test"; S.stories = Object.assign({}, S.stories, { [tid]: clean }); return tid; })();
+  S.progress[id] = Object.assign(freshProgress(), { step: i + 1, testFrom: edId ?? "new" });
+  save(); openSession(id);
+}
+
 "use strict";
 
 /* ---------- Campaign content ---------- */
@@ -2340,7 +2740,9 @@ const P = (sid) => {
   p.fails = p.fails || {}; p.tier = p.tier || {}; p.revealed = p.revealed || {}; p.interp = p.interp || {};
   return p;
 };
-const sessionOf = (sid) => SESSIONS.find((x) => x.id === sid);
+const sessionOf = (sid) => SESSIONS.find((x) => x.id === sid) || (S.stories?.[sid] ? storyToSession(sid, S.stories[sid]) : null);
+const helpFor = (sess, st) => HELP[sess.id]?.[st.id] || (sess.story ? storyHelp(sess.id, st.id) : null);
+const interpFor = (sess, st) => INTERPRET[sess.id]?.[st.id] || (sess.story ? storyInterp(sess.id, st.id) : null);
 const REQUIRES = { s2: "s1", s3: "s2", s6: "s3", s4: "s6", s5: "s4" };
 function sessionState(i) {
   const sess = SESSIONS[i];
@@ -2395,8 +2797,15 @@ function renderDiceLog() {
 function render() {
   renderSheet(); renderSpells(); renderDiceLog();
   $("rollResult").textContent = "Roll 10 or more for the next hint. Chance: 11 in 20, or 55%.";
+  renderModes();
   if (S.view === "prologue" || !S.name || !S.cls) return renderPrologue();
-  if (S.view === "map" || !S.current) return renderMap();
+  if (S.view === "stories") return renderStories();
+  if (S.view === "editor") {
+    if (!ED) { try { const d = JSON.parse(localStorage.getItem(KEY + "-draft") || "null"); if (d) { ED = d.ED; edId = d.id; } } catch (e) {} }
+    if (ED) return renderEditor();
+    S.view = "stories"; return renderStories();
+  }
+  if (S.view === "map" || !S.current || !sessionOf(S.current)) return renderMap();
   const sess = sessionOf(S.current);
   const prog = P(sess.id);
   renderTrack(sess, prog);
@@ -2407,11 +2816,24 @@ function render() {
 function renderTrack(sess, prog) {
   const items = sess.chapters.map((c) => `<span class="${c.id < prog.step ? "done" : c.id === prog.step ? "now" : ""}">${c.short}</span>`);
   items.push(`<span class="${prog.step > sess.chapters.length ? "now" : ""}">Epilogue</span>`);
-  $("track").innerHTML = `<button class="backlink" id="toMap">← Map</button>` + items.join("");
+  $("track").innerHTML = `<button class="backlink" id="toMap">${sess.story ? (prog.testFrom ? "← Back to editor" : "← Story Mode") : "← Map"}</button>` + items.join("");
   $("toMap").addEventListener("click", goMap);
 }
 
-function goMap() { S.view = "map"; save(); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+function renderModes() {
+  const nav = $("modes"); if (!nav) return;
+  const hasHero = S.name && S.cls && S.view !== "prologue";
+  nav.hidden = !hasHero;
+  const inStory = S.view === "stories" || S.view === "editor" || (S.view === "session" && sessionOf(S.current)?.story);
+  nav.querySelectorAll("[data-mode]").forEach((b) => { const on = (b.dataset.mode === "stories") === !!inStory; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+}
+function goMap() {
+  const sess = sessionOf(S.current);
+  if (sess && sess.story) {
+    const prog = P(sess.id);
+    if (prog.testFrom) { delete S.stories.st_test; delete S.progress.st_test; S.current = null; S.view = "editor"; save(); render(); return; }
+    S.view = "stories"; save(); render(); window.scrollTo({ top: 0, behavior: "smooth" }); return;
+  } S.view = "map"; save(); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 
 function mapSVG() {
   // Positions of quest sites on the 1000 x 640 parchment.
@@ -2534,7 +2956,7 @@ function renderChapter(sess, prog) {
   const st = sess.chapters[prog.step - 1];
   const solved = prog.solved[st.id];
   const guess = prog.guesses[st.id];
-  const iq = INTERPRET[sess.id]?.[st.id];
+  const iq = interpFor(sess, st);
   const interpDone = !iq || prog.interp[st.id]?.done;
   const enemyHP = st.enemy ? (solved ? (interpDone ? 0 : Math.ceil(st.enemy.hp / 2)) : st.enemy.hp) : 0;
   const needsGuess = st.predict && !guess;
@@ -2543,7 +2965,7 @@ function renderChapter(sess, prog) {
     <div class="card">
       <div class="chead">
         <canvas class="portrait" id="npcArt" width="64" height="64" aria-hidden="true"></canvas>
-        <div><div class="dm-label">THE DUNGEON MASTER SPEAKS · SESSION ${sess.num}</div>
+        <div><div class="dm-label">THE DUNGEON MASTER SPEAKS · ${sess.story ? "STORY MODE" : `SESSION ${sess.num}`}</div>
         <h2 class="chapter">${st.title}</h2>
         <div class="npcname">With ${esc(NPC_NAMES[st.npc || sess.npc] || "")}</div></div>
       </div>
@@ -2609,7 +3031,7 @@ function renderChapter(sess, prog) {
 }
 
 function hintsHTML(sess, prog, st) {
-  const h = HELP[sess.id]?.[st.id]; if (!h) return "";
+  const h = helpFor(sess, st); if (!h) return "";
   const tier = prog.tier[st.id] || 0, fails = prog.fails[st.id] || 0;
   const solved = !!prog.solved[st.id], revealed = !!prog.revealed[st.id];
   const baseXP = sess.xp || 100, revealXP = Math.round(baseXP * REVEAL_XP / 100);
@@ -2622,7 +3044,7 @@ function hintsHTML(sess, prog, st) {
   }
   const row = [];
   if (!solved && tier < 2) row.push(`<button class="btn ghost small" id="hintRoll">🎲 Roll for a ${tier ? "clue" : "nudge"}</button>`);
-  if (!solved && !revealed && fails >= 2) row.push(`<button class="btn ghost small warn" id="revealBtn">Reveal the answer · only ${revealXP} XP</button>`);
+  if (!solved && !revealed && fails >= 2 && h.answer) row.push(`<button class="btn ghost small warn" id="revealBtn">Reveal the answer · only ${revealXP} XP</button>`);
   if (row.length) html += `<div class="hint-actions">${row.join("")}</div>`;
   html += `<div class="hint-note" id="hintNote">${solved ? "" : fails >= 2 || revealed ? "" : `The answer can be revealed after 2 failed casts. Failed casts so far: ${fails}.`}</div>`;
   return html;
@@ -2634,7 +3056,7 @@ function bindHints(sess, prog, st) {
     prog.revealed[st.id] = true; save(); refreshHints(sess, prog, st);
   });
   if ($("useAnswer")) $("useAnswer").addEventListener("click", () => {
-    const ta = $("code"); ta.value = HELP[sess.id][st.id].answer; prog.code[st.id] = ta.value; save(); syncHL();
+    const ta = $("code"); ta.value = helpFor(sess, st).answer; prog.code[st.id] = ta.value; save(); syncHL();
     ta.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
@@ -2797,19 +3219,19 @@ function renderEpilogue(sess, prog) {
     <div class="card">
       <div class="chead">
         <canvas class="portrait" id="npcArt" width="64" height="64" aria-hidden="true"></canvas>
-        <div><div class="dm-label">THE DUNGEON MASTER SPEAKS · SESSION ${sess.num}</div>
+        <div><div class="dm-label">THE DUNGEON MASTER SPEAKS · ${sess.story ? "STORY MODE" : `SESSION ${sess.num}`}</div>
         <h2 class="chapter">Epilogue · ${esc(sess.title)}</h2></div>
       </div>
       <div class="narration">${sess.epilogue(S, prog)}</div>
-      <div class="task"><b>Session ${sess.num} complete.</b> ${sess.summary} ${esc(S.name)} is level ${S.level} with ${S.xp} XP.</div>
+      <div class="task"><b>${sess.story ? "Story complete." : `Session ${sess.num} complete.`}</b> ${sess.summary} ${esc(S.name)} is level ${S.level} with ${S.xp} XP.</div>
       <div class="actions" style="padding:14px 0 0;border:0">
-        <button class="btn red" id="mapBtn">Back to the map →</button>
-        <span style="align-self:center;color:var(--muted);font-size:16px">${sess.optional ? "Next on the map: Millbrook." : SESSIONS[nextIdx] ? `New on the map: ${esc(next.place)}.` : "You have completed the whole campaign."}</span>
+        <button class="btn red" id="mapBtn">${sess.story ? (prog.testFrom ? "Back to the editor →" : "Back to Story Mode →") : "Back to the map →"}</button>
+        <span style="align-self:center;color:var(--muted);font-size:16px">${sess.story ? "" : sess.optional ? "Next on the map: Millbrook." : SESSIONS[nextIdx] ? `New on the map: ${esc(next.place)}.` : "You have completed the whole campaign."}</span>
       </div>
       <p style="margin-top:14px"><button class="reset" id="restart">Start over with a new character</button></p>
     </div>
-    ${feedbackHTML(sess)}`;
-  bindFeedback(sess, prog);
+    ${sess.story ? "" : feedbackHTML(sess)}`;
+  if (!sess.story) bindFeedback(sess, prog);
   drawSprite($("npcArt"), sess.npc);
   $("mapBtn").addEventListener("click", goMap);
   $("restart").addEventListener("click", () => { S = JSON.parse(JSON.stringify(DEFAULT)); save(); render(); });
@@ -2932,7 +3354,14 @@ async function rRun(src) {
   } finally { shelter.purge(); }
 }
 async function rCheck(sid, step, nimg) {
-  const raw = await webR.evalRString(`.check("${sid}", ${step}, ${nimg})`);
+  let raw;
+  const sess = sessionOf(sid);
+  if (sess && sess.story) {
+    const ch = sess.chapters[step - 1];
+    await webR.objs.globalEnv.bind(".ck", ch.check || "");
+    await webR.objs.globalEnv.bind(".cfail", ch.fail || "");
+    raw = await webR.evalRString(`.check_story(.ck, .cfail, ${nimg})`);
+  } else raw = await webR.evalRString(`.check("${sid}", ${step}, ${nimg})`);
   const i = raw.indexOf("\x01");
   return [raw.slice(0, i) === "1", raw.slice(i + 1)];
 }
@@ -3037,7 +3466,7 @@ function rollForHint() {
   const prog = sess ? P(sess.id) : null;
   const st = sess && prog.step <= sess.chapters.length ? sess.chapters[prog.step - 1] : null;
   const say = (t) => { $("rollResult").textContent = t; const n = $("hintNote"); if (n) n.textContent = t; };
-  if (!st || !HELP[sess.id]?.[st.id]) { say("No quest is active. Roll when you face a challenge."); return; }
+  if (!st || !helpFor(sess, st)) { say("No quest is active. Roll when you face a challenge."); return; }
   const tier = prog.tier[st.id] || 0;
   if (prog.solved[st.id]) { say("This challenge is already beaten."); return; }
   if (tier >= 2) { say("The DM has given every hint. After 2 failed casts you can reveal the answer."); return; }
@@ -3069,6 +3498,21 @@ $("rollBtn").addEventListener("click", rollForHint);
 async function prepareSession(sid) {
   const sess = sessionOf(sid); const prog = P(sid);
   preparedFor = null;
+  if (sess.story) {
+    const st = S.stories[sid];
+    await webR.objs.globalEnv.bind(".scsv", st.dataset.csv || "");
+    await webR.objs.globalEnv.bind(".sname", st.dataset.name || "data");
+    try { await webR.evalRVoid(".setup_story(.scsv, .sname)"); }
+    catch (e) { const o = $("out"); if (o) { o.className = "out err"; o.textContent = "The story's data could not be read as CSV: " + e.message; } }
+    for (const ch of sess.chapters) {
+      if (ch.id >= prog.step) break;
+      const src = prog.code[ch.id] && !prog.code[ch.id].includes("____") ? prog.code[ch.id] : storyHelp(sid, ch.id)?.answer;
+      if (src) await rRun(src);
+    }
+    preparedFor = sid;
+    if (S.view === "session" && S.current === sid) { const rb = $("runBtn"); if (rb) rb.disabled = false; const vb = $("viewBtn"); if (vb) vb.disabled = false; const o = $("out"); if (o && o.textContent.startsWith("R is still")) o.textContent = "Output appears here."; }
+    return;
+  }
   await webR.evalRVoid(`.setup_${sid}()`);
   // Replay this session's solved steps so variables like `clean` exist again.
   for (const ch of sess.chapters) {
@@ -3118,8 +3562,18 @@ async function boot() {
 }
 
 load();
-render();
-boot();
+(async () => {
+  const q = new URLSearchParams(location.search).get("story");
+  if (q && S.name && S.cls) {
+    try { const st = await decodeStory(q); const id = await addStory(st); S.view = "stories"; save(); history.replaceState(null, "", location.pathname); } catch (e) { console.warn(e); }
+  } else if (q) { try { const st = await decodeStory(q); await addStory(st); history.replaceState(null, "", location.pathname); } catch (e) {} }
+  document.querySelectorAll("#modes [data-mode]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.mode === "stories") { S.view = "stories"; } else { S.view = "map"; }
+    save(); render(); window.scrollTo({ top: 0 });
+  }));
+  render();
+  boot();
+})();
 
 $("spellSearch").addEventListener("input", (e) => { spellQuery = e.target.value; renderSpells(); });
 </script>

@@ -548,3 +548,23 @@ G <- new.env(parent = globalenv())
   if (!isTRUE(as.numeric(G$nobles) == top)) return(.say(FALSE, "That is not the segment with the highest luxury_share."))
   .say(TRUE, sprintf("Segment %d are the Nobles: about %.0f gold per basket, %.0f%% luxury goods, but only %.1f visits a month.", top, exp$basket_gold[top], 100 * exp$luxury_share[top], exp$visits_per_month[top]))
 }
+
+## ---------- Story Mode (stories written by a human DM) ----------
+.setup_story <- function(csv, name) {
+  G <<- new.env(parent = globalenv())
+  if (nzchar(csv)) {
+    d <- utils::read.csv(text = csv, stringsAsFactors = FALSE, check.names = TRUE)
+    assign(if (nzchar(name)) make.names(name) else "data", d, envir = G)
+  }
+  invisible(TRUE)
+}
+.check_story <- function(expr, fail_msg, nimg) {
+  if (!nzchar(trimws(expr))) return(.say(TRUE, "The DM set no check for this step. Well cast."))
+  env <- new.env(parent = G)
+  env$n_plots <- nimg
+  v <- tryCatch(eval(parse(text = expr), env), error = function(e) structure(conditionMessage(e), class = "check_error"))
+  if (inherits(v, "check_error")) return(.say(FALSE, paste0("Not yet. (The check needs something that isn't there yet: ", v, ")")))
+  if (isTRUE(v)) return(.say(TRUE, "The DM nods. That's exactly it."))
+  if (is.character(v) && length(v) == 1) return(.say(FALSE, v))
+  .say(FALSE, if (nzchar(fail_msg)) fail_msg else "Not quite. Read the task again, or roll for a hint.")
+}
