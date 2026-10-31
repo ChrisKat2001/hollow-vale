@@ -1,5 +1,5 @@
 /* The Hollow Vale: offline support. Bump VERSION whenever any file changes. */
-const VERSION = "hollow-vale-v3";
+const VERSION = "hollow-vale-v4";
 const PRECACHE = [
   "./",
   "icons/apple-touch-icon.png",
@@ -47,7 +47,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== location.origin) return;
   // Pages: try the network first so updates arrive, fall back to the cache offline.
   if (req.mode === "navigate") {
-    event.respondWith(fetch(req).then((r) => { caches.open(VERSION).then((c) => c.put(req, r.clone())); return r; })
+    event.respondWith(fetch(req, { cache: "no-cache" }).then((r) => { caches.open(VERSION).then((c) => c.put(req, r.clone())); return r; })
       .catch(() => caches.match(req).then((r) => r || caches.match("./"))));
     return;
   }
